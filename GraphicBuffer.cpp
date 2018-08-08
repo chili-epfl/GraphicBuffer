@@ -3,15 +3,19 @@
 #include <string>
 #include <cstdlib>
 #include <iostream>
+#include <QDebug>
 
 using std::string;
 
-const int GRAPHICBUFFER_SIZE = 1024;
+const int GRAPHICBUFFER_SIZE = 4096;
 
 template<typename Func>
 void setFuncPtr (Func*& funcPtr, const DynamicLibrary& lib, const string& symname)
 {
     funcPtr = reinterpret_cast<Func*>(lib.getFunctionPtr(symname.c_str()));
+    if(funcPtr == nullptr) {
+        qDebug() << "Warning, obtained a nullptr for" << symname.c_str();
+    }
 }
 
 #if defined(__aarch64__)
@@ -49,6 +53,20 @@ RT* callConstructor4 (void (*fptr)(), void* memory, T1 param1, T2 param2, T3 par
 #endif
 }
 
+template <typename RT, typename T1, typename T2, typename T3, typename T4, typename T5, typename T6, typename T7>
+RT* callConstructor7 (void (*fptr)(), void* memory, T1 param1, T2 param2, T3 param3, T4 param4, T5 param5, T6 param6, T7 param7)
+{
+#if defined(CPU_ARM)
+    // C1 constructors return pointer
+    typedef RT* (*ABIFptr)(void*, T1, T2, T3, T4, T5, T6, T7);
+    (void)((ABIFptr)fptr)(memory, param1, param2, param3, param4, param5, param6, param7);
+    return reinterpret_cast<RT*>(memory);
+#else
+    qDebug() << "ERROR: UNSUPPORTED ARCH!";
+    return nullptr;
+#endif
+}
+
 template <typename T>
 void callDestructor (void (*fptr)(), T* obj)
 {
@@ -81,7 +99,7 @@ static android::android_native_base_t* getAndroidNativeBase (android::GraphicBuf
 GraphicBuffer::GraphicBuffer(uint32_t width, uint32_t height, PixelFormat format, uint32_t usage):
     library("libui.so")
 {
-    setFuncPtr(functions.constructor, library, "_ZN7android13GraphicBufferC1Ejjij");
+    setFuncPtr(functions.constructor, library, "_ZN7android13GraphicBufferC2EjjijjP13native_handleb");
     setFuncPtr(functions.destructor, library, "_ZN7android13GraphicBufferD1Ev");
     setFuncPtr(functions.getNativeBuffer, library, "_ZNK7android13GraphicBuffer15getNativeBufferEv");
     setFuncPtr(functions.lock, library, "_ZN7android13GraphicBuffer4lockEjPPv");
@@ -91,40 +109,47 @@ GraphicBuffer::GraphicBuffer(uint32_t width, uint32_t height, PixelFormat format
     // allocate memory for GraphicBuffer object
     void *const memory = malloc(GRAPHICBUFFER_SIZE);
     if (memory == nullptr) {
-        std::cerr << "Could not alloc for GraphicBuffer" << std::endl;
+        qDebug() << "Could not alloc for GraphicBuffer";
         return;
     }
 
     try {
-        android::GraphicBuffer* const gb = callConstructor4<android::GraphicBuffer, uint32_t, uint32_t, PixelFormat, uint32_t>(
+        android::GraphicBuffer* const gb = callConstructor7<android::GraphicBuffer, uint32_t, uint32_t, PixelFormat, uint32_t,
+                uint32_t, void*, bool>(
                 functions.constructor,
                 memory,
                 width,
                 height,
                 format,
-                usage
+                usage,
+                    1,
+                    nullptr,
+                    false
                 );
+
         android::android_native_base_t* const base = getAndroidNativeBase(gb);
         status_t ctorStatus = functions.initCheck(gb);
 
         if (ctorStatus) {
             // ctor failed
             callDestructor<android::GraphicBuffer>(functions.destructor, gb);
-            std::cerr << "GraphicBuffer ctor failed, initCheck returned "  << ctorStatus << std::endl;
+            qDebug() << "GraphicBuffer ctor failed, initCheck returned "  << ctorStatus;
         }
 
         // check object layout
         if (base->magic != 0x5f626672u) // "_bfr"
-            std::cerr << "GraphicBuffer layout unexpected" << std::endl;
+            qDebug() << "GraphicBuffer layout unexpected";
 
         // check object version
         const uint32_t expectedVersion = sizeof(void *) == 4 ? 96 : 168;
         if (base->version != expectedVersion)
-            std::cerr << "GraphicBuffer version unexpected" << std::endl;
+            qDebug() << "GraphicBuffer version unexpected";
 
         base->incRef(base);
         impl = gb;
+
     } catch (...) {
+        qDebug() << "GraphicBuffer initialization failed";
         free(memory);
         throw;
     }

@@ -2,6 +2,7 @@
 
 #include <iostream>
 #include <dlfcn.h>
+#include <QDebug>
 
 DynamicLibrary::DynamicLibrary(const char *fileName)
 {
@@ -16,9 +17,9 @@ DynamicLibrary::~DynamicLibrary()
 
 void *DynamicLibrary::getFunctionPtr(const char *name) const
 {
-    auto ret = (void *)dlsym(libHandle, name);
+    auto ret = (void *) dlsym(libHandle, name);
     if (ret == nullptr) {
-        std::cerr << "Failed to get function " << name << std::endl;
+        qDebug() << "Failed to get function " << name;
     }
     return ret;
 }
