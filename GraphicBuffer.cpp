@@ -131,7 +131,7 @@ GraphicBuffer::GraphicBuffer(uint32_t width, uint32_t height, PixelFormat format
     qDebug() << "GBUFFER" << memory << (void*) functions.constructor << (void*) functions.destructor << (void*) functions.getNativeBuffer << (void*) functions.lock << (void*) functions.unlock << (void*) functions.initCheck;
 
     try {
-        std::string name = std::string("abacaba");
+        static std::string name = std::string("abacaba");
         android::GraphicBuffer* const gb = callConstructor5<android::GraphicBuffer, uint32_t, uint32_t, PixelFormat, uint32_t, std::string *>(
                 functions.constructor,
                 memory,
@@ -164,6 +164,8 @@ GraphicBuffer::GraphicBuffer(uint32_t width, uint32_t height, PixelFormat format
 
         base->incRef(base);
         impl = gb;
+
+        qDebug() << "GB Constructor CHECK OK" << (void*) gb;
 
     } catch (...) {
         qDebug() << "GraphicBuffer initialization failed";
