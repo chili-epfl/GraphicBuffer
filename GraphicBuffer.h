@@ -81,14 +81,12 @@ struct GraphicBufferFunctions
     typedef status_t				(*initCheckFunc)		(android::GraphicBuffer* buffer);
     typedef status_t				(*lockFunc)				(android::GraphicBuffer* buffer, uint32_t usage, void** vaddr);
     typedef status_t				(*unlockFunc)			(android::GraphicBuffer* buffer);
-    typedef status_t				(*reallocateFunc)		(android::GraphicBuffer* buffer, uint32_t w, uint32_t h, PixelFormat f, uint32_t reqUsage);
     typedef ANativeWindowBuffer*	(*getNativeBufferFunc)	(const android::GraphicBuffer* buffer);
 
     genericFunc						constructor;
     genericFunc						destructor;
     lockFunc						lock;
     unlockFunc						unlock;
-    reallocateFunc					reallocate;
     getNativeBufferFunc				getNativeBuffer;
     initCheckFunc					initCheck;
 };

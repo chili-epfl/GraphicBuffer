@@ -7,7 +7,7 @@
 
 using std::string;
 
-const int GRAPHICBUFFER_SIZE = 4096;
+const int GRAPHICBUFFER_SIZE = 1000000;
 
 template<typename Func>
 void setFuncPtr (Func*& funcPtr, const DynamicLibrary& lib, const string& symname)
@@ -49,6 +49,21 @@ RT* callConstructor4 (void (*fptr)(), void* memory, T1 param1, T2 param2, T3 par
     ((ABIFptr)fptr)(memory, param1, param2, param3, param4);
     return reinterpret_cast<RT*>(memory);
 #else
+    return nullptr;
+#endif
+}
+
+
+template <typename RT, typename T1, typename T2, typename T3, typename T4, typename T5>
+RT* callConstructor5 (void (*fptr)(), void* memory, T1 param1, T2 param2, T3 param3, T4 param4, T5 param5)
+{
+#if defined(CPU_ARM)
+    // C1 constructors return pointer
+    typedef RT* (*ABIFptr)(void*, T1, T2, T3, T4, T5);
+    (void)((ABIFptr)fptr)(memory, param1, param2, param3, param4, param5);
+    return reinterpret_cast<RT*>(memory);
+#else
+    qDebug() << "ERROR: UNSUPPORTED ARCH!";
     return nullptr;
 #endif
 }
@@ -99,13 +114,12 @@ static android::android_native_base_t* getAndroidNativeBase (android::GraphicBuf
 GraphicBuffer::GraphicBuffer(uint32_t width, uint32_t height, PixelFormat format, uint32_t usage):
     library("libui.so")
 {
-    setFuncPtr(functions.constructor, library, "_ZN7android13GraphicBufferC2EjjijjP13native_handleb");
+    setFuncPtr(functions.constructor, library, "_ZN7android13GraphicBufferC1EjjijNSt3__112basic_stringIcNS1_11char_traitsIcEENS1_9allocatorIcEEEE");
     setFuncPtr(functions.destructor, library, "_ZN7android13GraphicBufferD1Ev");
     setFuncPtr(functions.getNativeBuffer, library, "_ZNK7android13GraphicBuffer15getNativeBufferEv");
     setFuncPtr(functions.lock, library, "_ZN7android13GraphicBuffer4lockEjPPv");
     setFuncPtr(functions.unlock, library, "_ZN7android13GraphicBuffer6unlockEv");
     setFuncPtr(functions.initCheck, library, "_ZNK7android13GraphicBuffer9initCheckEv");
-    setFuncPtr(functions.reallocate, library, "_ZN7android13GraphicBuffer10reallocateEjjij");
 
     // allocate memory for GraphicBuffer object
     void *const memory = malloc(GRAPHICBUFFER_SIZE);
@@ -114,34 +128,28 @@ GraphicBuffer::GraphicBuffer(uint32_t width, uint32_t height, PixelFormat format
         return;
     }
 
+    qDebug() << "GBUFFER" << memory << (void*) functions.constructor << (void*) functions.destructor << (void*) functions.getNativeBuffer << (void*) functions.lock << (void*) functions.unlock << (void*) functions.initCheck;
+
     try {
-        android::GraphicBuffer* const gb = callConstructor7<android::GraphicBuffer, uint32_t, uint32_t, PixelFormat, uint32_t,
-                uint32_t, void*, bool>(
+        std::string name = std::string("abacaba");
+        android::GraphicBuffer* const gb = callConstructor5<android::GraphicBuffer, uint32_t, uint32_t, PixelFormat, uint32_t, std::string *>(
                 functions.constructor,
                 memory,
                 width,
                 height,
                 format,
                 usage,
-                    10,
-                    nullptr,
-                    false
+                &name
                 );
 
-        // need reallocate call in Android 25
-        status_t reallocateStatus = functions.reallocate(gb, width, height, format, usage);
-        if (reallocateStatus) {
-            // reallocate failed
-            callDestructor<android::GraphicBuffer>(functions.destructor, gb);
-            qDebug() << "GraphicBuffer reallocate returned "  << reallocateStatus;
-        }
+        qDebug() << "GB Constructor OK";
 
         android::android_native_base_t* const base = getAndroidNativeBase(gb);
         status_t ctorStatus = functions.initCheck(gb);
 
         if (ctorStatus) {
             // ctor failed
-            callDestructor<android::GraphicBuffer>(functions.destructor, gb);
+            //callDestructor<android::GraphicBuffer>(functions.destructor, gb);
             qDebug() << "GraphicBuffer ctor failed, initCheck returned "  << ctorStatus;
         }
 
