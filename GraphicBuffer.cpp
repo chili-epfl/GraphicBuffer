@@ -105,6 +105,7 @@ GraphicBuffer::GraphicBuffer(uint32_t width, uint32_t height, PixelFormat format
     setFuncPtr(functions.lock, library, "_ZN7android13GraphicBuffer4lockEjPPv");
     setFuncPtr(functions.unlock, library, "_ZN7android13GraphicBuffer6unlockEv");
     setFuncPtr(functions.initCheck, library, "_ZNK7android13GraphicBuffer9initCheckEv");
+    setFuncPtr(functions.reallocate, library, "_ZN7android13GraphicBuffer10reallocateEjjij");
 
     // allocate memory for GraphicBuffer object
     void *const memory = malloc(GRAPHICBUFFER_SIZE);
@@ -122,10 +123,18 @@ GraphicBuffer::GraphicBuffer(uint32_t width, uint32_t height, PixelFormat format
                 height,
                 format,
                 usage,
-                    1,
+                    10,
                     nullptr,
                     false
                 );
+
+        // need reallocate call in Android 25
+        status_t reallocateStatus = functions.reallocate(gb, width, height, format, usage);
+        if (reallocateStatus) {
+            // reallocate failed
+            callDestructor<android::GraphicBuffer>(functions.destructor, gb);
+            qDebug() << "GraphicBuffer reallocate returned "  << reallocateStatus;
+        }
 
         android::android_native_base_t* const base = getAndroidNativeBase(gb);
         status_t ctorStatus = functions.initCheck(gb);
