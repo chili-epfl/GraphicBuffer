@@ -3,15 +3,19 @@
 #include <string>
 #include <cstdlib>
 #include <iostream>
+#include <QDebug>
 
 using std::string;
 
-const int GRAPHICBUFFER_SIZE = 1024;
+const int GRAPHICBUFFER_SIZE = 1000000;
 
 template<typename Func>
 void setFuncPtr (Func*& funcPtr, const DynamicLibrary& lib, const string& symname)
 {
     funcPtr = reinterpret_cast<Func*>(lib.getFunctionPtr(symname.c_str()));
+    if(funcPtr == nullptr) {
+        qDebug() << "Warning, obtained a nullptr for" << symname.c_str();
+    }
 }
 
 #if defined(__aarch64__)
@@ -91,9 +95,11 @@ GraphicBuffer::GraphicBuffer(uint32_t width, uint32_t height, PixelFormat format
     // allocate memory for GraphicBuffer object
     void *const memory = malloc(GRAPHICBUFFER_SIZE);
     if (memory == nullptr) {
-        std::cerr << "Could not alloc for GraphicBuffer" << std::endl;
+        qDebug() << "Could not alloc for GraphicBuffer";
         return;
     }
+
+    qDebug() << "GBUFFER" << memory << (void*) functions.constructor << (void*) functions.destructor << (void*) functions.getNativeBuffer << (void*) functions.lock << (void*) functions.unlock << (void*) functions.initCheck;
 
     try {
         android::GraphicBuffer* const gb = callConstructor4<android::GraphicBuffer, uint32_t, uint32_t, PixelFormat, uint32_t>(
@@ -104,27 +110,32 @@ GraphicBuffer::GraphicBuffer(uint32_t width, uint32_t height, PixelFormat format
                 format,
                 usage
                 );
+        qDebug() << "GB Constructor OK";
+
         android::android_native_base_t* const base = getAndroidNativeBase(gb);
         status_t ctorStatus = functions.initCheck(gb);
 
         if (ctorStatus) {
             // ctor failed
-            callDestructor<android::GraphicBuffer>(functions.destructor, gb);
-            std::cerr << "GraphicBuffer ctor failed, initCheck returned "  << ctorStatus << std::endl;
+            qDebug() << "GraphicBuffer ctor failed, initCheck returned "  << ctorStatus;
+//            callDestructor<android::GraphicBuffer>(functions.destructor, gb);
         }
 
         // check object layout
         if (base->magic != 0x5f626672u) // "_bfr"
-            std::cerr << "GraphicBuffer layout unexpected" << std::endl;
+            qDebug() << "GraphicBuffer layout unexpected";
 
         // check object version
         const uint32_t expectedVersion = sizeof(void *) == 4 ? 96 : 168;
         if (base->version != expectedVersion)
-            std::cerr << "GraphicBuffer version unexpected" << std::endl;
+            qDebug() << "GraphicBuffer version unexpected";
 
         base->incRef(base);
         impl = gb;
+
+        qDebug() << "GB Constructor CHECK OK" << (void*) gb;
     } catch (...) {
+        qDebug() << "GraphicBuffer initialization failed";
         free(memory);
         throw;
     }
